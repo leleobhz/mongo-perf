@@ -148,7 +148,7 @@ def get_server_info(hostname="localhost", port="27017", replica_set=None, user=N
         client = pymongo.MongoClient("mongodb://%s%s:%s/%s" % (credential, hostname, port, database))
     else:
         client = pymongo.MongoReplicaSetClient("mongodb://%s%s:%s/%s?replicaSet=%s" % (credential, hostname, port, database, replica_set))
-    db = client.test
+    db = client.get_default_database()
     server_build_info = db.command("buildinfo")
     server_status = db.command("serverStatus")
     client.close()
