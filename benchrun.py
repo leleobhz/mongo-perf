@@ -70,6 +70,15 @@ def parse_arguments():
     parser.add_argument('-p', '--port', dest='port',
                         help='Port of the mongod/mongos under test',
                         default='27017')
+    parser.add_argument('-D', '--database', dest='database',
+                        help='Database name of the mongod/mongos under test',
+                        default='test')
+    parser.add_argument('-u', '--user', dest='user',
+                        help='Username of the mongod/mongos under test',
+                        default='')
+    parser.add_argument('-P', '--password', dest='password',
+                        help='Password of the mongod/mongos under test',
+                        default='')
     parser.add_argument('--replset', dest='replica_set',
                         help='replica set name of the mongod/mongos under test',
                         default=None)
@@ -121,7 +130,7 @@ def get_shell_info(shell_path):
     return json.loads(out)
 
 
-def get_server_info(hostname="localhost", port="27017", replica_set=None):
+def get_server_info(hostname="localhost", port="27017", replica_set=None, user=None, password=None, database="test"):
     """
     Get the mongod server build info and server status from the target mongod server
     :param hostname: the hostname the target database is running on (defaults to localhost)
@@ -129,10 +138,16 @@ def get_server_info(hostname="localhost", port="27017", replica_set=None):
     :param replica_set: the replica set name the target database is using (defaults to none)
     :return: a tuple of the buildinfo and the server status
     """
-    if replica_set is None:
-        client = pymongo.MongoClient("mongodb://%s:%s/test" % (hostname, port))
+    if user is not None:
+        import urllib
+        credential = ("%s:%s@"%(user, urllib.quote_plus(password)))
     else:
-        client = pymongo.MongoReplicaSetClient("mongodb://%s:%s/test?replicaSet=%s" % (hostname, port, replica_set))
+        credential = ''
+
+    if replica_set is None:
+        client = pymongo.MongoClient("mongodb://%s%s:%s/%s" % (credential, hostname, port, database))
+    else:
+        client = pymongo.MongoReplicaSetClient("mongodb://%s%s:%s/%s?replicaSet=%s" % (credential, hostname, port, database, replica_set))
     db = client.test
     server_build_info = db.command("buildinfo")
     server_status = db.command("serverStatus")
@@ -327,16 +342,19 @@ def main():
         args.shard = 2
 
     # Print version info.
-    call([args.shellpath, "--norc", "--port", args.port, "--eval",
+    call([args.shellpath, "--norc", "--port", args.port, "--host", args.hostname, "--username", args.user, "--password", args.password, "--eval",
           "print('db version: ' + db.version());"
-          " db.serverBuildInfo().gitVersion;"])
+          " db.serverBuildInfo().gitVersion;", args.database])
     print("")
 
     # get the server info and status
     (server_build_info, server_status) = get_server_info(hostname=args.hostname,
                                                          port=args.port,
                                                          replica_set=
-                                                         args.replica_set)
+                                                         args.replica_set,
+                                                         user=args.user,
+                                                         password=args.password,
+                                                         database=args.database)
 
     # Use hash to get commit_date
     committed_date = _get_git_committed_date(server_build_info['gitVersion'],
@@ -369,8 +387,9 @@ def main():
         test_bed["server_storage_engine"] = 'mmapv0'
 
     # Open a mongo shell subprocess and load necessary files.
+    # leleobhz was here
     mongo_proc = Popen([args.shellpath, "--norc", "--quiet", "--port",
-                        args.port], stdin=PIPE, stdout=PIPE)
+                        args.port, "--host", args.hostname, "--username", args.user, "--password", args.password, args.database], stdin=PIPE, stdout=PIPE)
 
     # load test files
     load_file_in_shell(mongo_proc, 'util/utils.js')
