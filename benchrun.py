@@ -150,7 +150,10 @@ def get_server_info(hostname="localhost", port="27017", replica_set=None, user=N
         client = pymongo.MongoReplicaSetClient("mongodb://%s%s:%s/%s?replicaSet=%s" % (credential, hostname, port, database, replica_set))
     db = client.get_default_database()
     server_build_info = db.command("buildinfo")
-    server_status = db.command("serverStatus")
+    try:
+        server_status = db.command("serverStatus")
+    except:
+        server_status = "Unavailable"
     client.close()
     return server_build_info, server_status
 
@@ -387,9 +390,9 @@ def main():
         test_bed["server_storage_engine"] = 'mmapv0'
 
     # Open a mongo shell subprocess and load necessary files.
-    # leleobhz was here
-    mongo_proc = Popen([args.shellpath, "--norc", "--quiet", "--port",
-                        args.port, "--host", args.hostname, "--username", args.user, "--password", args.password, args.database], stdin=PIPE, stdout=PIPE)
+    mongo_uri = "{}:{}/{}".format(args.hostname, args.port, args.database)
+    mongo_proc = Popen([args.shellpath, "--norc", "--quiet", "--username", args.user, 
+                        "--password", args.password, mongo_uri], stdin=PIPE, stdout=PIPE)
 
     # load test files
     load_file_in_shell(mongo_proc, 'util/utils.js')
